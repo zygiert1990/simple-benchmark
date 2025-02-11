@@ -56,13 +56,13 @@ public class Main {
         System.exit(0);
     }
 
-    private static void killCracJavaProcess(ExecutorService pidFinderExecutor) throws IOException, InterruptedException, ExecutionException {
-        Process pidFinderProcess = new ProcessBuilder()
+    private static void killCracJavaProcess(ExecutorService executor) throws IOException, InterruptedException, ExecutionException {
+        Process killProcess = new ProcessBuilder()
                 .command("sh", "-c", "kill -9 `jps | grep 'simple-application.jar' | awk '{print $1}'`")
                 .start();
-        DefaultProcessListener defaultProcessListener = new DefaultProcessListener(pidFinderProcess.getInputStream());
-        pidFinderExecutor.submit(defaultProcessListener).get();
-        pidFinderProcess.destroy();
+        DefaultProcessListener defaultProcessListener = new DefaultProcessListener(killProcess.getInputStream());
+        executor.submit(defaultProcessListener).get();
+        killProcess.destroy();
     }
 
     private static ProcessBuilder getProcessBuilder(Parameters parameters) {
