@@ -3,15 +3,17 @@ package org.zygiert;
 import java.io.*;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 public class Main {
-    public static void main(String[] args) throws IOException {
+    public static void main(String[] args) throws IOException, ExecutionException, InterruptedException {
         List<Long> times = new ArrayList<>();
         Parameters parameters = new Parameters(args);
         ProcessBuilder processBuilder = getProcessBuilder(parameters);
         ExecutorService executor = Executors.newSingleThreadExecutor();
+        ExecutorService cracTerminationExecutor = Executors.newSingleThreadExecutor();
 
         for (int i = 0; i < parameters.warmupIterations; i++) {
             Process process = processBuilder.start();
@@ -20,7 +22,11 @@ public class Main {
             while (true) {
                 if (processWatcher.serverStarted) {
                     System.out.println("Warmup iteration: " + (i + 1));
-                    process.destroy();
+                    if (parameters.isCRaC) {
+                        killCracJavaProcess(cracTerminationExecutor);
+                    } else {
+                        process.destroy();
+                    }
                     break;
                 }
             }
@@ -36,7 +42,11 @@ public class Main {
                     long elapsedTime = System.currentTimeMillis() - startTime;
                     times.add(elapsedTime);
                     System.out.println("Elapsed time: " + elapsedTime + " ms");
-                    process.destroy();
+                    if (parameters.isCRaC) {
+                        killCracJavaProcess(cracTerminationExecutor);
+                    } else {
+                        process.destroy();
+                    }
                     break;
                 }
             }
@@ -44,6 +54,15 @@ public class Main {
 
         times.forEach(System.out::println);
         System.exit(0);
+    }
+
+    private static void killCracJavaProcess(ExecutorService pidFinderExecutor) throws IOException, InterruptedException, ExecutionException {
+        Process pidFinderProcess = new ProcessBuilder()
+                .command("sh", "-c", "kill -9 `jps | grep 'simple-application.jar' | awk '{print $1}'`")
+                .start();
+        DefaultProcessListener defaultProcessListener = new DefaultProcessListener(pidFinderProcess.getInputStream());
+        pidFinderExecutor.submit(defaultProcessListener).get();
+        pidFinderProcess.destroy();
     }
 
     private static ProcessBuilder getProcessBuilder(Parameters parameters) {
@@ -58,6 +77,7 @@ public class Main {
         private final int warmupIterations;
         private final String directory;
         private final String command;
+        private final boolean isCRaC;
 
         private Parameters(String[] args) {
             if (args.length != 4) {
@@ -67,6 +87,7 @@ public class Main {
             warmupIterations = Integer.parseInt(args[1]);
             directory = args[2];
             command = args[3];
+            isCRaC = command.contains("CRaCRestoreFrom");
         }
     }
 
@@ -87,6 +108,19 @@ public class Main {
                                 }
                             }
                     );
+        }
+    }
+
+    private static final class DefaultProcessListener implements Runnable {
+        private final InputStream inputStream;
+
+        private DefaultProcessListener(InputStream inputStream) {
+            this.inputStream = inputStream;
+        }
+
+        @Override
+        public void run() {
+            new BufferedReader(new InputStreamReader(inputStream)).lines().forEach(System.out::println);
         }
     }
 }
