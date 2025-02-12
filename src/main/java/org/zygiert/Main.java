@@ -1,6 +1,9 @@
 package org.zygiert;
 
-import java.io.*;
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
@@ -13,24 +16,7 @@ public class Main {
         Parameters parameters = new Parameters(args);
         ProcessBuilder processBuilder = getProcessBuilder(parameters);
         ExecutorService executor = Executors.newSingleThreadExecutor();
-        ExecutorService cracTerminationExecutor = Executors.newSingleThreadExecutor();
-
-        for (int i = 0; i < parameters.warmupIterations; i++) {
-            Process process = processBuilder.start();
-            ProcessWatcher processWatcher = new ProcessWatcher(process.getInputStream());
-            executor.execute(processWatcher);
-            while (true) {
-                if (processWatcher.serverStarted) {
-                    System.out.println("Warmup iteration: " + (i + 1));
-                    if (parameters.isCRaC) {
-                        killCracJavaProcess(cracTerminationExecutor);
-                    } else {
-                        process.destroy();
-                    }
-                    break;
-                }
-            }
-        }
+        ExecutorService terminationExecutor = Executors.newSingleThreadExecutor();
 
         for (int i = 0; i < parameters.measureIterations; i++) {
             long startTime = System.currentTimeMillis();
@@ -42,10 +28,11 @@ public class Main {
                     long elapsedTime = System.currentTimeMillis() - startTime;
                     times.add(elapsedTime);
                     System.out.println("Elapsed time: " + elapsedTime + " ms");
-                    if (parameters.isCRaC) {
-                        killCracJavaProcess(cracTerminationExecutor);
-                    } else {
+                    if (parameters.isNativeImage) {
                         process.destroy();
+                        Thread.sleep(5000); // for unknown reason I have to wait here, perhaps for release some resources on OS, otherwise I get strange results
+                    } else {
+                        killProcess(terminationExecutor);
                     }
                     break;
                 }
@@ -56,9 +43,9 @@ public class Main {
         System.exit(0);
     }
 
-    private static void killCracJavaProcess(ExecutorService executor) throws IOException, InterruptedException, ExecutionException {
+    private static void killProcess(ExecutorService executor) throws IOException, InterruptedException, ExecutionException {
         Process killProcess = new ProcessBuilder()
-                .command("sh", "-c", "kill -9 `jps | grep 'simple-application-crac.jar' | awk '{print $1}'`")
+                .command("sh", "-c", "kill -9 `jps | grep 'simple-application' | awk '{print $1}'`")
                 .start();
         DefaultProcessListener defaultProcessListener = new DefaultProcessListener(killProcess.getInputStream());
         executor.submit(defaultProcessListener).get();
@@ -67,27 +54,22 @@ public class Main {
 
     private static ProcessBuilder getProcessBuilder(Parameters parameters) {
         ProcessBuilder processBuilder = new ProcessBuilder();
-        processBuilder.directory(new File(parameters.directory));
         processBuilder.command("sh", "-c", parameters.command);
         return processBuilder;
     }
 
     private static final class Parameters {
         private final int measureIterations;
-        private final int warmupIterations;
-        private final String directory;
         private final String command;
-        private final boolean isCRaC;
+        private final boolean isNativeImage;
 
         private Parameters(String[] args) {
-            if (args.length != 4) {
-                throw new IllegalArgumentException("Invalid number of arguments! You must specify four arguments (measureIterations, warmupIterations, directory, command)!");
+            if (args.length != 2) {
+                throw new IllegalArgumentException("Invalid number of arguments! You must specify two arguments (measureIterations, command)!");
             }
             measureIterations = Integer.parseInt(args[0]);
-            warmupIterations = Integer.parseInt(args[1]);
-            directory = args[2];
-            command = args[3];
-            isCRaC = command.contains("CRaCRestoreFrom");
+            command = args[1];
+            isNativeImage = !command.contains("java");
         }
     }
 
