@@ -39,7 +39,6 @@ public class Main {
             }
         }
 
-        times.forEach(System.out::println);
         System.exit(0);
     }
 
