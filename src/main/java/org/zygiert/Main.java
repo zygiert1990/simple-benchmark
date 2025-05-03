@@ -4,15 +4,12 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 public class Main {
     public static void main(String[] args) throws IOException, ExecutionException, InterruptedException {
-        List<Long> times = new ArrayList<>();
         Parameters parameters = new Parameters(args);
         ProcessBuilder processBuilder = getProcessBuilder(parameters);
         ExecutorService executor = Executors.newSingleThreadExecutor();
@@ -26,13 +23,11 @@ public class Main {
             while (true) {
                 if (processWatcher.serverStarted) {
                     long elapsedTime = System.currentTimeMillis() - startTime;
-                    times.add(elapsedTime);
                     System.out.println("Elapsed time: " + elapsedTime + " ms");
                     if (parameters.isNativeImage) {
                         process.destroy();
-                        Thread.sleep(5000); // for unknown reason I have to wait here, perhaps for release some resources on OS, otherwise I get strange results
                     } else {
-                        killProcess(terminationExecutor);
+                        killJVMProcess(terminationExecutor);
                     }
                     break;
                 }
@@ -42,7 +37,7 @@ public class Main {
         System.exit(0);
     }
 
-    private static void killProcess(ExecutorService executor) throws IOException, InterruptedException, ExecutionException {
+    private static void killJVMProcess(ExecutorService executor) throws IOException, InterruptedException, ExecutionException {
         Process killProcess = new ProcessBuilder()
                 .command("sh", "-c", "kill -9 `jps | grep 'simple-application' | awk '{print $1}'`")
                 .start();
