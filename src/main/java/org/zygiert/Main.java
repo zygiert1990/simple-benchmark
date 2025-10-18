@@ -26,6 +26,7 @@ public class Main {
                     System.out.println("Elapsed time: " + elapsedTime + " ms");
                     if (parameters.isNativeImage) {
                         process.destroy();
+                        Thread.sleep(1000); // for unknown reason I have to wait here, perhaps for release some resources on OS, otherwise I get strange results
                     } else {
                         killJVMProcess(terminationExecutor);
                     }
